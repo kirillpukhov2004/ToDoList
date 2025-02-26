@@ -9,10 +9,13 @@ import Foundation
 import UIKit
 
 protocol TaskListViewProtocol: AnyObject {
-    func showTasks(_ taskEntities: [TaskEntity])
-    func showNewTask(_ taskEntity: TaskEntity)
-    func updateTask(_ taskEntity: TaskEntity)
-    func deleteTask(_ taskID: UUID)
+    func showTasks()
+    func insertTask(at indexPath: IndexPath)
+    func updateTask(at indexPath: IndexPath)
+    func deleteTask(at indexPath: IndexPath)
+
+    func showActivityIndicator()
+    func hideActivityIndicator()
 }
 
 class TaskListViewController: UIViewController, TaskListViewProtocol {
@@ -25,26 +28,26 @@ class TaskListViewController: UIViewController, TaskListViewProtocol {
     private lazy var collectionView: UICollectionView = {
         let collectionView = UICollectionView(
             frame: .zero, collectionViewLayout: TaskListViewController.collectionViewLayout)
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: "cell")
 
         return collectionView
     }()
 
-    private lazy var todoCountLabel: UILabel = {
+    private lazy var numberOfUncompletedTasksLabel: UILabel = {
         let label = UILabel()
         label.font = .systemFont(ofSize: 13)
         label.textAlignment = .center
         return label
     }()
 
-    private let presenter: TaskListPresenterProtocol
+    private lazy var activityIndicator: UIActivityIndicatorView = {
+        let activityIndicator = UIActivityIndicatorView()
+        activityIndicator.hidesWhenStopped = true
+        activityIndicator.style = .large
+        return activityIndicator
+    }()
 
-    private var taskEntities: [TaskEntity] = [] {
-        didSet {
-            updateToDoCountLabelText()
-        }
-    }
+    private let presenter: TaskListPresenterProtocol
 
     init(presenter: TaskListPresenter) {
         self.presenter = presenter
@@ -60,7 +63,6 @@ class TaskListViewController: UIViewController, TaskListViewProtocol {
         super.viewDidLoad()
 
         setupUI()
-        presenter.viewDidLoad()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -68,6 +70,14 @@ class TaskListViewController: UIViewController, TaskListViewProtocol {
 
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationController?.isToolbarHidden = false
+
+        presenter.viewWillAppear()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+
+        presenter.viewWillDisappear()
     }
 
     private func setupUI() {
@@ -76,7 +86,7 @@ class TaskListViewController: UIViewController, TaskListViewProtocol {
         navigationItem.title = "Задачи"
         toolbarItems = [
             UIBarButtonItem(systemItem: .flexibleSpace),
-            UIBarButtonItem(customView: todoCountLabel),
+            UIBarButtonItem(customView: numberOfUncompletedTasksLabel),
             UIBarButtonItem(systemItem: .flexibleSpace),
             UIBarButtonItem(
                 image: UIImage(systemName: "square.and.pencil"),
@@ -90,54 +100,68 @@ class TaskListViewController: UIViewController, TaskListViewProtocol {
             contextMenuViewClass.appearance().overrideUserInterfaceStyle = .light
         }
 
-        todoCountLabel.text = "0 Задач"
+        numberOfUncompletedTasksLabel.text = "0 Задач"
 
         collectionView.dataSource = self
         collectionView.delegate = self
         view.addSubview(collectionView)
+        collectionView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             collectionView.leftAnchor.constraint(equalTo: view.leftAnchor),
             collectionView.topAnchor.constraint(equalTo: view.layoutMarginsGuide.topAnchor),
             collectionView.rightAnchor.constraint(equalTo: view.rightAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+
+        view.addSubview(activityIndicator)
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            activityIndicator.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor)
+        ])
     }
 
-    private func updateToDoCountLabelText() {
-        todoCountLabel.text = "\(taskEntities.filter({ !$0.isCompleted }).count) Задач"
-        todoCountLabel.sizeToFit()
+    private func updateNumberOfUncompletedTasksLabelText() {
+        numberOfUncompletedTasksLabel.text = "\(presenter.numberOfUncompletedTasks) Задач"
+        numberOfUncompletedTasksLabel.sizeToFit()
     }
 
     // MARK: - ToDoListViewProtocol Implementation
 
-    func showTasks(_ taskEntities: [TaskEntity]) {
-        self.taskEntities = taskEntities
+    func showTasks() {
         collectionView.reloadData()
-        updateToDoCountLabelText()
+        updateNumberOfUncompletedTasksLabelText()
     }
 
-    func showNewTask(_ taskEntity: TaskEntity) {
-        self.taskEntities.insert(taskEntity, at: 0)
-        collectionView.insertItems(at: [IndexPath(row: 0, section: 0)])
+    func insertTask(at indexPath: IndexPath) {
+        collectionView.insertItems(at: [indexPath])
+        updateNumberOfUncompletedTasksLabelText()
     }
 
-    func updateTask(_ taskEntity: TaskEntity) {
-        if let index = taskEntities.firstIndex(where: { $0.id == taskEntity.id }) {
-            taskEntities[index] = taskEntity
-            collectionView.reloadItems(at: [IndexPath(row: index, section: 0)])
-        }
+    func updateTask(at indexPath: IndexPath) {
+        collectionView.reloadItems(at: [indexPath])
+        updateNumberOfUncompletedTasksLabelText()
     }
 
-    func deleteTask(_ taskID: UUID) {
-        guard let index = taskEntities.firstIndex(where: { $0.id == taskID }) else { return }
-        taskEntities.remove(at: index)
-        collectionView.deleteItems(at: [IndexPath(row: index, section: 0)])
+    func deleteTask(at indexPath: IndexPath) {
+        collectionView.deleteItems(at: [indexPath])
+        updateNumberOfUncompletedTasksLabelText()
+    }
+
+    func showActivityIndicator() {
+        collectionView.isHidden = true
+        activityIndicator.startAnimating()
+    }
+
+    func hideActivityIndicator() {
+        collectionView.isHidden = false
+        activityIndicator.stopAnimating()
     }
 }
 
 extension TaskListViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return taskEntities.count
+        return presenter.numberOfTasks
     }
 
     func collectionView(
@@ -149,14 +173,14 @@ extension TaskListViewController: UICollectionViewDataSource {
             for: indexPath
         )
 
-        let taskEntity = taskEntities[indexPath.row]
+        let taskEntity = presenter.getTask(for: indexPath)
         let contentConfiguration = TaskListContentConfiguration(
             title: taskEntity.title,
             description: taskEntity.description,
             date: taskEntity.date,
             isCompleted: taskEntity.isCompleted
         ) { [weak self] in
-            self?.presenter.toggleToDoItemCompletion(taskEntity.id)
+            self?.presenter.toggleTaskCompletion(at: indexPath)
         }
 
         cell.contentConfiguration = contentConfiguration
@@ -166,15 +190,13 @@ extension TaskListViewController: UICollectionViewDataSource {
 
 extension TaskListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let taskID = taskEntities[indexPath.row].id
-
-        presenter.taskSelectionAction(taskID)
+        presenter.taskSelectionAction(for: indexPath)
     }
 
     func collectionView(
         _ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint
     ) -> UIContextMenuConfiguration? {
-        let taskEntity = taskEntities[indexPaths[0].row]
+        let taskEntity = presenter.getTask(for: indexPaths[0])
 
         return UIContextMenuConfiguration(identifier: nil) {
             let previewProvider = TaskListContextMenuContentPreviewProvider()
@@ -183,16 +205,16 @@ extension TaskListViewController: UICollectionViewDelegate {
             return previewProvider
         } actionProvider: { action in
             let edit = UIAction(title: "Редактировать", image: UIImage(named: "edit")) { [weak self] _ in
-                self?.presenter.taskContextMenuItemAction(taskEntity.id, menuItem: .edit)
+                self?.presenter.taskContextMenuItemAction(for: indexPaths[0], menuItem: .edit)
             }
 
             let export = UIAction(title: "Поделиться", image: UIImage(named: "export")) { [weak self] _ in
-                self?.presenter.taskContextMenuItemAction(taskEntity.id, menuItem: .share)
+                self?.presenter.taskContextMenuItemAction(for: indexPaths[0], menuItem: .share)
             }
 
             let delete = UIAction(title: "Удалить", image: UIImage(named: "trash"), attributes: .destructive) {
                 [weak self] _ in
-                self?.presenter.taskContextMenuItemAction(taskEntity.id, menuItem: .delete)
+                self?.presenter.taskContextMenuItemAction(for: indexPaths[0], menuItem: .delete)
             }
 
             return UIMenu(children: [edit, export, delete])

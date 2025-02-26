@@ -14,15 +14,19 @@ enum TaskListContextMenuItem {
 }
 
 protocol TaskListPresenterProtocol: AnyObject {
-    func viewDidLoad()
+    var numberOfTasks: Int { get }
+    var numberOfUncompletedTasks: Int { get }
+
+    func viewWillAppear()
+    func viewWillDisappear()
+
+    func toggleTaskCompletion(at indexPath: IndexPath)
 
     func createTaskButtonAction()
+    func taskSelectionAction(for indexPath: IndexPath)
+    func taskContextMenuItemAction(for indexPath: IndexPath, menuItem: TaskListContextMenuItem)
 
-    func toggleToDoItemCompletion(_ taskID: UUID)
-
-    func taskSelectionAction(_ taskID: UUID)
-
-    func taskContextMenuItemAction(_ taskID: UUID, menuItem: TaskListContextMenuItem)
+    func getTask(for indexPath: IndexPath) -> TaskEntity
 }
 
 class TaskListPresenter: TaskListPresenterProtocol {
@@ -30,77 +34,87 @@ class TaskListPresenter: TaskListPresenterProtocol {
     var interactor: TaskListInteractorInputProtocol
     var router: TaskListRouterProtocol
 
+    var numberOfTasks: Int {
+        interactor.numberOfTasks
+    }
+
+    var numberOfUncompletedTasks: Int {
+        interactor.numberOfUncompletedTasks
+    }
+
     init(interactor: TaskListInteractorInputProtocol, router: TaskListRouterProtocol) {
         self.interactor = interactor
         self.router = router
     }
 
-    func viewDidLoad() {
-        interactor.fetchTasks()
+    func viewWillAppear() {
+        interactor.viewWillAppear()
     }
 
-    func toggleToDoItemCompletion(_ taskID: UUID) {
-        interactor.toggleTaskCompletion(taskID)
+    func viewWillDisappear() {
+        interactor.viewWillDisappear()
+    }
+
+    func toggleTaskCompletion(at indexPath: IndexPath) {
+        interactor.toggleTaskCompletion(at: indexPath)
     }
 
     func createTaskButtonAction() {
-        guard
-            let view,
-            let interactor = interactor as? TaskListInteractor
-        else { return }
+        guard let view else { return }
 
-        router.navigateToTaskCreation(view: view, delegate: interactor)
+        router.navigateToTaskCreation(view: view)
     }
 
-    func taskSelectionAction(_ taskID: UUID) {
-        guard
-            let view,
-            let interactor = interactor as? TaskListInteractor
-        else { return }
+    func taskSelectionAction(for indexPath: IndexPath) {
+        guard let view else { return }
 
-        router.navigateToTaskDetails(view: view, taskID: taskID, delegate: interactor)
+        let taskEntity = getTask(for: indexPath)
+
+        router.navigateToTaskDetails(view: view, taskID: taskEntity.id)
     }
 
-    func taskContextMenuItemAction(_ taskID: UUID, menuItem: TaskListContextMenuItem) {
+    func taskContextMenuItemAction(for indexPath: IndexPath, menuItem: TaskListContextMenuItem) {
         switch menuItem {
         case .edit:
-            guard
-                let view,
-                let interactor = interactor as? TaskListInteractor
-            else { return }
+            guard let view else { return }
 
-            router.navigateToTaskDetails(view: view, taskID: taskID, delegate: interactor)
+            let taskEntity = getTask(for: indexPath)
+
+            router.navigateToTaskDetails(view: view, taskID: taskEntity.id)
         case .share:
             break
         case .delete:
-            interactor.deleteTask(taskID)
+            interactor.deleteTask(at: indexPath)
         }
+    }
+
+    func getTask(for indexPath: IndexPath) -> TaskEntity {
+        interactor.getTask(for: indexPath)
     }
 }
 
 extension TaskListPresenter: TaskListInteractorOutputProtocol {
-    func didFetchTasks(_ result: Result<[TaskEntity], any Error>) {
-        switch result {
-        case .success(let taskEntities):
-            view?.showTasks(taskEntities)
-        case .failure(let error):
-            print(error)
-        }
+    func didFetchTasks() {
+        view?.showTasks()
     }
 
-    func didToggleTaskCompletion(_ task: TaskEntity) {
-        view?.updateTask(task)
+    func didInsertTask(at indexPath: IndexPath) {
+        view?.insertTask(at: indexPath)
     }
 
-    func didCreateTask(_ taskEntity: TaskEntity) {
-        view?.showNewTask(taskEntity)
+    func didUpdateTask(at indexPath: IndexPath) {
+        view?.updateTask(at: indexPath)
     }
 
-    func didUpdateTask(_ taskEntity: TaskEntity) {
-        view?.updateTask(taskEntity)
+    func didDeleteTask(at indexPath: IndexPath) {
+        view?.deleteTask(at: indexPath)
     }
 
-    func didDeleteTask(_ taskID: UUID) {
-        view?.deleteTask(taskID)
+    func willStartInitialFetch() {
+        view?.showActivityIndicator()
+    }
+
+    func didFinishInitialFetch() {
+        view?.hideActivityIndicator()
     }
 }

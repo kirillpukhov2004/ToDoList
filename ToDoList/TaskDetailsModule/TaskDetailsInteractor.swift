@@ -23,7 +23,6 @@ protocol TaskDetailsInteractorOutputProtocol: AnyObject {
 
 final class TaskDetailsInteractor: TaskDetailsInteractorInputProtocol {
     weak var presenter: TaskDetailsInteractorOutputProtocol?
-    weak var delegate: TaskDetailsDelegate?
 
     private let coreDataService: CoreDataService
 
@@ -85,10 +84,6 @@ final class TaskDetailsInteractor: TaskDetailsInteractorInputProtocol {
                 coreDataService.managedObjectContext.rollback()
                 return
             }
-
-            delegate?.didCreateTask(taskEntity)
-        } else {
-            delegate?.didUpdateTask(taskEntity)
         }
     }
 }

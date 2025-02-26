@@ -9,15 +9,14 @@ import Foundation
 import UIKit
 
 protocol TaskDetailsRouterProtocol: AnyObject {
-    static func createModule(taskID: UUID?, delegate: TaskDetailsDelegate) -> TaskDetailsViewController
+    static func createModule(taskID: UUID?) -> TaskDetailsViewController
 
     func navigateBack(view: TaskDetailsViewProtocol)
 }
 
 final class TaskDetailsRouter: TaskDetailsRouterProtocol {
-    static func createModule(taskID: UUID?, delegate: TaskDetailsDelegate) -> TaskDetailsViewController {
+    static func createModule(taskID: UUID?) -> TaskDetailsViewController {
         let interactor = TaskDetailsInteractor(taskID: taskID, coreDataService: .shared)
-        interactor.delegate = delegate
         let router = TaskDetailsRouter()
         let presenter = TaskDetailsPresenter(interactor: interactor, router: router)
         interactor.presenter = presenter

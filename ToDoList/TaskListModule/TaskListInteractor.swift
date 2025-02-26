@@ -5,27 +5,56 @@
 //  Created by Kirill Pukhov on 21.02.2025.
 //
 
+import CoreData
 import Foundation
 
 protocol TaskListInteractorInputProtocol: AnyObject {
-    func fetchTasks()
-    func toggleTaskCompletion(_ taskID: UUID)
-    func deleteTask(_ taskID: UUID)
+    var numberOfTasks: Int { get }
+    var numberOfUncompletedTasks: Int { get }
+
+    func viewWillAppear()
+    func viewWillDisappear()
+
+    func getTask(for indexPath: IndexPath) -> TaskEntity
+    func deleteTask(at indexPath: IndexPath)
+    func toggleTaskCompletion(at indexPath: IndexPath)
 }
 
 protocol TaskListInteractorOutputProtocol: AnyObject {
-    func didFetchTasks(_ result: Result<[TaskEntity], Error>)
-    func didToggleTaskCompletion(_ task: TaskEntity)
-    func didCreateTask(_ taskEntity: TaskEntity)
-    func didUpdateTask(_ taskEntity: TaskEntity)
-    func didDeleteTask(_ taskID: UUID)
+    func didFetchTasks()
+    func didInsertTask(at indexPath: IndexPath)
+    func didUpdateTask(at indexPath: IndexPath)
+    func didDeleteTask(at indexPath: IndexPath)
+
+    func willStartInitialFetch()
+    func didFinishInitialFetch()
 }
 
-final class TaskListInteractor: TaskListInteractorInputProtocol {
+final class TaskListInteractor: NSObject, TaskListInteractorInputProtocol {
     weak var presenter: TaskListInteractorOutputProtocol?
 
     private let coreDataService: CoreDataService
     private let tasksAPI: TasksAPIProtocol
+
+    private var fetchedResultsController: NSFetchedResultsController<Task>?
+
+    var numberOfTasks: Int {
+        fetchedResultsController?.fetchedObjects?.count ?? 0
+    }
+
+    var numberOfUncompletedTasks: Int {
+        let fetchRequest = Task.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "isCompleted = 0")
+
+        do {
+            return try coreDataService.managedObjectContext.count(for: fetchRequest)
+        } catch {
+            let nsError = error as NSError
+            print("Unresolved error: \(nsError), \(nsError.userInfo)")
+
+            return 0
+        }
+    }
 
     var isInitialFetchCompleted: Bool {
         get {
@@ -40,59 +69,66 @@ final class TaskListInteractor: TaskListInteractorInputProtocol {
     init(coreDataService: CoreDataService, tasksAPI: TasksAPIProtocol) {
         self.coreDataService = coreDataService
         self.tasksAPI = tasksAPI
+
+        super.init()
+    }
+
+    func viewWillAppear() {
+        let fetchRequest = Task.fetchRequest()
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "date", ascending: false)]
+
+        fetchedResultsController = NSFetchedResultsController(
+            fetchRequest: fetchRequest,
+            managedObjectContext: coreDataService.managedObjectContext,
+            sectionNameKeyPath: nil,
+            cacheName: nil
+        )
+        fetchedResultsController?.delegate = self
+
+        fetchTasks()
+    }
+
+    func viewWillDisappear() {
+        fetchedResultsController = nil
+    }
+
+    func getTask(for indexPath: IndexPath) -> TaskEntity {
+        guard let taskManagedObject = fetchedResultsController?.object(at: indexPath) else  { return .placeholder }
+
+        return TaskEntity(taskManagedObject: taskManagedObject)
     }
 
     func fetchTasks() {
-        if isInitialFetchCompleted {
-            regularFetchTasks()
-        } else {
-            initialFetchTasks()
+        guard let fetchedResultsController else { return }
+
+        do {
+            try fetchedResultsController.performFetch()
+            presenter?.didFetchTasks()
+
+            if !isInitialFetchCompleted { initialFetchTasks() }
+        } catch {
+            let nsError = error as NSError
+            print("Unresolved error: \(nsError), \(nsError.userInfo)")
         }
     }
 
-    func toggleTaskCompletion(_ taskID: UUID) {
-        let context = coreDataService.managedObjectContext
+    func toggleTaskCompletion(at indexPath: IndexPath) {
+        guard let taskManagedObject = fetchedResultsController?.object(at: indexPath) else  { return }
 
-        let request = Task.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", taskID as CVarArg)
-
-        do {
-            if let taskManagedObject = try context.fetch(request).first {
-                taskManagedObject.isCompleted.toggle()
-
-                coreDataService.saveManagedObjectContext()
-
-                let taskEntity = TaskEntity(taskManagedObject: taskManagedObject)
-                presenter?.didToggleTaskCompletion(taskEntity)
-            }
-        } catch {
-            let nsError = error as NSError
-            print("Failed to toggle completion for task with id \(taskID): \(nsError) \(nsError.userInfo)")
-        }
+        taskManagedObject.isCompleted.toggle()
+        coreDataService.saveManagedObjectContext()
     }
 
-    func deleteTask(_ taskID: UUID) {
-        let context = coreDataService.managedObjectContext
+    func deleteTask(at indexPath: IndexPath) {
+        guard let taskManagedObject = fetchedResultsController?.object(at: indexPath) else  { return }
 
-        let request = Task.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", taskID as CVarArg)
-
-        do {
-            if let taskManagedObject = try context.fetch(request).first {
-                context.delete(taskManagedObject)
-
-                coreDataService.saveManagedObjectContext()
-
-                presenter?.didDeleteTask(taskID)
-            }
-        } catch {
-            let nsError = error as NSError
-            print("Failed to delete task with id \(taskID.uuidString): \(nsError) \(nsError.userInfo)")
-        }
-
+        coreDataService.managedObjectContext.delete(taskManagedObject)
+        coreDataService.saveManagedObjectContext()
     }
 
     private func initialFetchTasks() {
+        presenter?.willStartInitialFetch()
+
         tasksAPI.fetchTasks { [weak self] result in
             guard let self else { return }
 
@@ -109,50 +145,47 @@ final class TaskListInteractor: TaskListInteractorInputProtocol {
                     taskManagedObject.isCompleted = taskEntity.isCompleted
                 }
 
-                let sortedTasks = taskEntities.sorted { $0.date < $1.date }
-
                 coreDataService.saveManagedObjectContext()
-                isInitialFetchCompleted = true
-
-                presenter?.didFetchTasks(.success(sortedTasks))
             case .failure(let error):
-                isInitialFetchCompleted = true
-                
-                presenter?.didFetchTasks(.failure(error))
+                let nsError = error as NSError
+                print("Unresolved error: \(nsError), \(nsError.userInfo)")
             }
-        }
-    }
 
-    private func regularFetchTasks() {
-        let context = coreDataService.managedObjectContext
-
-        let request = Task.fetchRequest()
-        request.sortDescriptors = [
-            NSSortDescriptor(key: "date", ascending: false),
-            NSSortDescriptor(key: "title", ascending: false)
-        ]
-
-        do {
-            let taskManagedObjects = try context.fetch(request)
-            let taskEntities = taskManagedObjects.compactMap(TaskEntity.init)
-
-            DispatchQueue.main.async { [weak self] in
-                self?.presenter?.didFetchTasks(.success(taskEntities))
-            }
-        } catch {
-            DispatchQueue.main.async { [weak self] in
-                self?.presenter?.didFetchTasks(.failure(error))
-            }
+            isInitialFetchCompleted = true
+            presenter?.didFinishInitialFetch()
         }
     }
 }
 
-extension TaskListInteractor: TaskDetailsDelegate {
-    func didCreateTask(_ taskEntity: TaskEntity) {
-        presenter?.didCreateTask(taskEntity)
+extension TaskListInteractor: NSFetchedResultsControllerDelegate {
+    func controllerDidChangeContent(_ controller: NSFetchedResultsController<any NSFetchRequestResult>) {
+        presenter?.didFetchTasks()
     }
 
-    func didUpdateTask(_ taskEntity: TaskEntity) {
-        presenter?.didUpdateTask(taskEntity)
+    func controller(
+        _ controller: NSFetchedResultsController<any NSFetchRequestResult>,
+        didChange anObject: Any,
+        at indexPath: IndexPath?,
+        for type: NSFetchedResultsChangeType,
+        newIndexPath: IndexPath?
+    ) {
+//        switch type {
+//        case .insert:
+//            if let newIndexPath {
+//                presenter?.didInsertTask(at: newIndexPath)
+//            }
+//        case .delete:
+//            if let indexPath {
+//                presenter?.didDeleteTask(at: indexPath)
+//            }
+//        case .move:
+//            break
+//        case .update:
+//            if let indexPath {
+//                presenter?.didUpdateTask(at: indexPath)
+//            }
+//        default:
+//            break
+//        }
     }
 }

@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D6317AE62D6F7D5800969D0D /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = D6317AE52D6F7D5800969D0D /* README.md */; };
 		D6E0B2B02D684290005E4796 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = D6E0B2AF2D684290005E4796 /* Alamofire */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		D6317AE52D6F7D5800969D0D /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		D6E0B28D2D684104005E4796 /* ToDoList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoList.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -50,6 +52,7 @@
 		D6E0B2842D684104005E4796 = {
 			isa = PBXGroup;
 			children = (
+				D6317AE52D6F7D5800969D0D /* README.md */,
 				D6E0B28F2D684104005E4796 /* ToDoList */,
 				D6E0B28E2D684104005E4796 /* Products */,
 			);
@@ -132,6 +135,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D6317AE62D6F7D5800969D0D /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

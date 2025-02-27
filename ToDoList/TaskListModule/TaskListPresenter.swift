@@ -98,20 +98,8 @@ extension TaskListPresenter: TaskListInteractorOutputProtocol {
         view?.showTasks()
     }
 
-    func didInsertTask(at indexPath: IndexPath) {
-        view?.insertTask(at: indexPath)
-    }
-
-    func didDeleteTask(at indexPath: IndexPath) {
-        view?.deleteTask(at: indexPath)
-    }
-
     func didMoveTask(at indexPath: IndexPath, to newIndexPath: IndexPath) {
         view?.moveTask(at: indexPath, to: newIndexPath)
-    }
-
-    func didUpdateTask(at indexPath: IndexPath) {
-        view?.updateTask(at: indexPath)
     }
 
     func didPerformBatchUpdates(

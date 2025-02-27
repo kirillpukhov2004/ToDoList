@@ -22,10 +22,7 @@ protocol TaskListInteractorInputProtocol: AnyObject {
 
 protocol TaskListInteractorOutputProtocol: AnyObject {
     func didFetchTasks()
-    func didInsertTask(at indexPath: IndexPath)
-    func didDeleteTask(at indexPath: IndexPath)
     func didMoveTask(at indexPath: IndexPath, to newIndexPath: IndexPath)
-    func didUpdateTask(at indexPath: IndexPath)
     func didPerformBatchUpdates(
         insertIndexPaths: Set<IndexPath>,
         deleteIndexPaths: Set<IndexPath>,

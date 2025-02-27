@@ -10,10 +10,7 @@ import UIKit
 
 protocol TaskListViewProtocol: AnyObject {
     func showTasks()
-    func insertTask(at indexPath: IndexPath)
-    func deleteTask(at indexPath: IndexPath)
     func moveTask(at indexPath: IndexPath, to newIndexPath: IndexPath)
-    func updateTask(at indexPath: IndexPath)
 
     func performBatchUpdates(
         insertIndexPaths: Set<IndexPath>,

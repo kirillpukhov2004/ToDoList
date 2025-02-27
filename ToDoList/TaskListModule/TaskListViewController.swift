@@ -11,8 +11,15 @@ import UIKit
 protocol TaskListViewProtocol: AnyObject {
     func showTasks()
     func insertTask(at indexPath: IndexPath)
-    func updateTask(at indexPath: IndexPath)
     func deleteTask(at indexPath: IndexPath)
+    func moveTask(at indexPath: IndexPath, to newIndexPath: IndexPath)
+    func updateTask(at indexPath: IndexPath)
+
+    func performBatchUpdates(
+        insertIndexPaths: Set<IndexPath>,
+        deleteIndexPaths: Set<IndexPath>,
+        updateIndexPaths: Set<IndexPath>
+    )
 
     func showActivityIndicator()
     func hideActivityIndicator()
@@ -138,14 +145,33 @@ class TaskListViewController: UIViewController, TaskListViewProtocol {
         updateNumberOfUncompletedTasksLabelText()
     }
 
+    func deleteTask(at indexPath: IndexPath) {
+        collectionView.deleteItems(at: [indexPath])
+        updateNumberOfUncompletedTasksLabelText()
+    }
+
+    func moveTask(at indexPath: IndexPath, to newIndexPath: IndexPath) {
+        collectionView.moveItem(at: indexPath, to: newIndexPath)
+        updateNumberOfUncompletedTasksLabelText()
+    }
+
     func updateTask(at indexPath: IndexPath) {
         collectionView.reloadItems(at: [indexPath])
         updateNumberOfUncompletedTasksLabelText()
     }
 
-    func deleteTask(at indexPath: IndexPath) {
-        collectionView.deleteItems(at: [indexPath])
-        updateNumberOfUncompletedTasksLabelText()
+    func performBatchUpdates(
+        insertIndexPaths: Set<IndexPath>,
+        deleteIndexPaths: Set<IndexPath>,
+        updateIndexPaths: Set<IndexPath>
+    ) {
+        collectionView.performBatchUpdates {
+            collectionView.insertItems(at: Array(insertIndexPaths))
+            collectionView.deleteItems(at: Array(deleteIndexPaths))
+            collectionView.reloadItems(at: Array(updateIndexPaths))
+        } completion: { [weak self] _ in
+            self?.updateNumberOfUncompletedTasksLabelText()
+        }
     }
 
     func showActivityIndicator() {

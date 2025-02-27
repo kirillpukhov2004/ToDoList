@@ -23,8 +23,14 @@ protocol TaskListInteractorInputProtocol: AnyObject {
 protocol TaskListInteractorOutputProtocol: AnyObject {
     func didFetchTasks()
     func didInsertTask(at indexPath: IndexPath)
-    func didUpdateTask(at indexPath: IndexPath)
     func didDeleteTask(at indexPath: IndexPath)
+    func didMoveTask(at indexPath: IndexPath, to newIndexPath: IndexPath)
+    func didUpdateTask(at indexPath: IndexPath)
+    func didPerformBatchUpdates(
+        insertIndexPaths: Set<IndexPath>,
+        deleteIndexPaths: Set<IndexPath>,
+        updateIndexPaths: Set<IndexPath>
+    )
 
     func willStartInitialFetch()
     func didFinishInitialFetch()
@@ -39,7 +45,7 @@ final class TaskListInteractor: NSObject, TaskListInteractorInputProtocol {
     private var fetchedResultsController: NSFetchedResultsController<Task>?
 
     var numberOfTasks: Int {
-        fetchedResultsController?.fetchedObjects?.count ?? 0
+        fetchedResultsController?.sections?[0].numberOfObjects ?? 0
     }
 
     var numberOfUncompletedTasks: Int {
@@ -65,6 +71,10 @@ final class TaskListInteractor: NSObject, TaskListInteractorInputProtocol {
             UserDefaults.standard.set(newValue, forKey: "isInitialFetchCompleted")
         }
     }
+
+    private var insertIndexPaths: Set<IndexPath> = []
+    private var deleteIndexPaths: Set<IndexPath> = []
+    private var updateIndexPaths: Set<IndexPath> = []
 
     init(coreDataService: CoreDataService, tasksAPI: TasksAPIProtocol) {
         self.coreDataService = coreDataService
@@ -158,8 +168,18 @@ final class TaskListInteractor: NSObject, TaskListInteractorInputProtocol {
 }
 
 extension TaskListInteractor: NSFetchedResultsControllerDelegate {
+    func controllerWillChangeContent(_ controller: NSFetchedResultsController<any NSFetchRequestResult>) {
+        insertIndexPaths.removeAll()
+        deleteIndexPaths.removeAll()
+        updateIndexPaths.removeAll()
+    }
+
     func controllerDidChangeContent(_ controller: NSFetchedResultsController<any NSFetchRequestResult>) {
-        presenter?.didFetchTasks()
+        presenter?.didPerformBatchUpdates(
+            insertIndexPaths: insertIndexPaths,
+            deleteIndexPaths: deleteIndexPaths,
+            updateIndexPaths: updateIndexPaths
+        )
     }
 
     func controller(
@@ -169,23 +189,25 @@ extension TaskListInteractor: NSFetchedResultsControllerDelegate {
         for type: NSFetchedResultsChangeType,
         newIndexPath: IndexPath?
     ) {
-//        switch type {
-//        case .insert:
-//            if let newIndexPath {
-//                presenter?.didInsertTask(at: newIndexPath)
-//            }
-//        case .delete:
-//            if let indexPath {
-//                presenter?.didDeleteTask(at: indexPath)
-//            }
-//        case .move:
-//            break
-//        case .update:
-//            if let indexPath {
-//                presenter?.didUpdateTask(at: indexPath)
-//            }
-//        default:
-//            break
-//        }
+        switch type {
+        case .insert:
+            guard let newIndexPath else { return }
+
+            insertIndexPaths.insert(newIndexPath)
+        case .delete:
+            guard let indexPath else { return }
+
+            deleteIndexPaths.insert(indexPath)
+        case .move:
+            guard let indexPath, let newIndexPath else { return }
+
+            presenter?.didMoveTask(at: indexPath, to: newIndexPath)
+        case .update:
+            guard let indexPath else { return }
+
+            updateIndexPaths.insert(indexPath)
+        default:
+            break
+        }
     }
 }

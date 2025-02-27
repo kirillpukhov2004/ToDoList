@@ -102,12 +102,28 @@ extension TaskListPresenter: TaskListInteractorOutputProtocol {
         view?.insertTask(at: indexPath)
     }
 
+    func didDeleteTask(at indexPath: IndexPath) {
+        view?.deleteTask(at: indexPath)
+    }
+
+    func didMoveTask(at indexPath: IndexPath, to newIndexPath: IndexPath) {
+        view?.moveTask(at: indexPath, to: newIndexPath)
+    }
+
     func didUpdateTask(at indexPath: IndexPath) {
         view?.updateTask(at: indexPath)
     }
 
-    func didDeleteTask(at indexPath: IndexPath) {
-        view?.deleteTask(at: indexPath)
+    func didPerformBatchUpdates(
+        insertIndexPaths: Set<IndexPath>,
+        deleteIndexPaths: Set<IndexPath>,
+        updateIndexPaths: Set<IndexPath>
+    ) {
+        view?.performBatchUpdates(
+            insertIndexPaths: insertIndexPaths,
+            deleteIndexPaths: deleteIndexPaths,
+            updateIndexPaths: updateIndexPaths
+        )
     }
 
     func willStartInitialFetch() {
